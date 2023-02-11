@@ -1,4 +1,4 @@
-# HttpComponent
+# DelphiHttpComponent
 Delphi component wrapper for WinInet library. Written in Delphi 2010.
 
 ## How to use
@@ -14,7 +14,7 @@ begin
 end;
 ```
 ### POST
-Posting a simple text:
+Posting a simple text/JSON:
 ```procedure TForm1.Button1Click(Sender: TObject);
 begin
   if HttpRequest1.Post('https://httpbin.org/put', 'testing a POST') then
@@ -54,3 +54,6 @@ begin
 end;
 ```
 
+## Improvements
+- Added the possibility to send data using GET method, similar to POST;
+- Added _ContentType_ parameter to methods that can send raw text.
