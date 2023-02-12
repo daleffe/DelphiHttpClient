@@ -22,6 +22,7 @@ type
     procedure FromRawString(AStringHeaders: String);
   public
     procedure AddHeader(AName, AValue: String);
+
     function  GetAll(AName: String)   : TStrings;
     function  GetFirst(AName: String) : String;
     function  ToString                : String; override;
@@ -132,10 +133,7 @@ type
   TCookies = class(TStringList)
   end;
 
-  TSecurityOption  = (soSecure, soSsl, soSsl3, soPct, soPct4, soIetfssl4, so40bit, so128bit, so56bit, soUnknownbit,
-    soIgnoreRevication, soIgnoreUnknownCA, soIgnoreWrongUsage, soIgnoreCertCNInvalid, soIgnoreCertDateInvalid,
-    soIgnoreRedirectHttps, soIgnoreRedirectHttp);
-
+  TSecurityOption  = (soSecure, soSsl, soSsl3, soPct, soPct4, soIetfssl4, so40bit, so128bit, so56bit, soUnknownbit, soIgnoreRevication, soIgnoreUnknownCA, soIgnoreWrongUsage, soIgnoreCertCNInvalid, soIgnoreCertDateInvalid, soIgnoreRedirectHttps, soIgnoreRedirectHttp);
   TSecurityOptions = set of TSecurityOption;
   THttpVersion     = (hv1_0, hv1_1);
 
@@ -150,6 +148,7 @@ type
     FHttpVersion     : THttpVersion;
 
     procedure SetUseCookies(AValue: Boolean);
+
     function  Request(AMethod, AUrl: String; ABody: TBody): Boolean;
   public
     constructor Create(AOwner: TComponent); override;
@@ -202,14 +201,15 @@ type
     FParams    : string;
     FIPVersion : TIPVersion;
 
-    procedure SetURI(const Value: String);
     function  GetURI: String;
+
+    procedure SetURI(const Value: String);
     procedure SetProtocol(const Value: String);
   public
     constructor Create(const AURI: String = '');
 
-    function    GetFullURI(const AOptionalFields: TURIOptionalFieldsSet = [ofAuthInfo, ofBookmark]): String;
-    function    GetPathAndParams: String;
+    function    GetFullURI(const AOptionalFields: TURIOptionalFieldsSet = [ofAuthInfo, ofBookmark]) : String;
+    function    GetPathAndParams                                                                    : String;
 
     property Bookmark  : String     read FBookmark  write FBookmark;
     property Document  : String     read FDocument  write FDocument;
@@ -241,6 +241,7 @@ end;
 constructor THeader.Create(AName, AValue: String);
 begin
   inherited Create;
+
   FName  := AName;
   FValue := AValue;
 end;
@@ -401,6 +402,7 @@ end;
 destructor TUrlEncodedFormBody.Destroy;
 begin
   FParts.Free;
+
   inherited;
 end;
 
@@ -468,7 +470,9 @@ var
   Boundary: String;
 begin
   Boundary  := '--------------------HttpClient' + RandomHex;
+
   inherited Create('multipart/form-data; boundary=' + Boundary, False);
+
   FBoundary := Boundary;
   FParts    := TObjectList<TPart>.Create;
 end;
