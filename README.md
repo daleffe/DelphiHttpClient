@@ -4,7 +4,7 @@ Delphi component wrapper for WinInet library. Written in Delphi 2010.
 ## How to use
 
 ### GET
-```
+```delphi
 procedure TForm1.Button1Click(Sender: TObject);
 begin
   if HttpRequest1.Get('https://httpbin.org/get') then
@@ -15,7 +15,8 @@ end;
 ```
 ### POST
 Posting a simple text/JSON:
-```procedure TForm1.Button1Click(Sender: TObject);
+```delphi
+procedure TForm1.Button1Click(Sender: TObject);
 begin
   if HttpRequest1.Post('https://httpbin.org/put', 'testing a POST') then
     ShowMessage(HttpRequest1.Response.ContentAsString)
@@ -24,7 +25,7 @@ begin
 end;
 ```
 Posting a file with a Multipart form:
-```
+```delphi
 procedure TForm1.Button1Click(Sender: TObject);
 var
   Body: TMultipartFormBody;
@@ -39,7 +40,7 @@ begin
 end;
 ```
 Posting a url encoded form:
-```
+```delphi
 procedure TForm1.Button1Click(Sender: TObject);
 var
   Body: TUrlEncodedFormBody;
@@ -56,4 +57,7 @@ end;
 
 ## Improvements
 - Added the possibility to send data using GET method, similar to POST;
-- Added _ContentType_ parameter to methods that can send raw text.
+- Added _ContentType_ parameter to methods that can send raw text;
+
+## Fixes
+- Solved bug that don't return Content-Length.

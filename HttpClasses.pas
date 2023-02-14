@@ -17,15 +17,20 @@ type
     property    Value : String read FValue;
   end;
 
-  THeaders = class(TObjectList<THeader>)
+  THeaders = class(TObject)
   private
+    FHeaders: TStringList;
+
     procedure FromRawString(AStringHeaders: String);
   public
-    procedure AddHeader(AName, AValue: String);
+    constructor Create();
+    destructor  Destroy; override;
 
-    function  GetAll(AName: String)   : TStrings;
-    function  GetFirst(AName: String) : String;
-    function  ToString                : String; override;
+    procedure   AddHeader(AName, AValue: String);
+
+    function    GetAll(AName: String)   : TStrings;
+    function    GetFirst(AName: String) : String;
+    function    ToString                : String; override;
   end;
 
   TBody = class abstract
@@ -148,8 +153,7 @@ type
     FHttpVersion     : THttpVersion;
 
     procedure SetUseCookies(AValue: Boolean);
-
-    function  Request(AMethod, AUrl: String; ABody: TBody): Boolean;
+    function  Request(AMethod, AUrl: String; ABody: TBody) : Boolean;
   public
     constructor Create(AOwner: TComponent); override;
     destructor  Destroy; override;
@@ -184,52 +188,13 @@ type
   end;
 
   TIPVersion            = (ivIP4, ivIP6);
-  TURIOptionalFields    = (ofAuthInfo, ofBookmark);
-  TURIOptionalFieldsSet = set of TURIOptionalFields;
-
-  THttpURI = class
-  private
-    FDocument  : string;
-    FProtocol  : string;
-    FURI       : string;
-    FPort      : Integer;
-    FPath      : string;
-    FHost      : string;
-    FBookmark  : string;
-    FUserName  : string;
-    FPassword  : string;
-    FParams    : string;
-    FIPVersion : TIPVersion;
-
-    function  GetURI: String;
-
-    procedure SetURI(const Value: String);
-    procedure SetProtocol(const Value: String);
-  public
-    constructor Create(const AURI: String = '');
-
-    function    GetFullURI(const AOptionalFields: TURIOptionalFieldsSet = [ofAuthInfo, ofBookmark]) : String;
-    function    GetPathAndParams                                                                    : String;
-
-    property Bookmark  : String     read FBookmark  write FBookmark;
-    property Document  : String     read FDocument  write FDocument;
-    property Host      : String     read FHost      write FHost;
-    property Password  : String     read FPassword  write FPassword;
-    property Path      : String     read FPath      write FPath;
-    property Params    : String     read FParams    write FParams;
-    property Port      : Integer    read FPort      write FPort;
-    property Protocol  : String     read FProtocol  write SetProtocol;
-    property URI       : String     read GetURI     write SetURI;
-    property Username  : String     read FUserName  write FUserName;
-    property IPVersion : TIPVersion read FIPVersion write FIPVersion;
-  end;
 
 procedure Register;
 
 implementation
 
 uses
-  Windows, IOUtils, UrlMon, WinInet, DateUtils, HttpUtils;
+  Windows, IOUtils, UrlMon, WinInet, DateUtils, StrUtils, HttpUtils;
 
 procedure Register;
 begin
@@ -248,9 +213,25 @@ end;
 
 {THeaders}
 
-procedure THeaders.AddHeader(AName, AValue: String);
+constructor THeaders.Create;
 begin
-  Add(THeader.Create(AName, AValue));
+  FHeaders            := TStringList.Create;
+  FHeaders.Duplicates := dupIgnore;
+end;
+
+destructor THeaders.Destroy;
+begin
+  if Assigned(FHeaders) then FHeaders.Free;
+  inherited;
+end;
+
+procedure THeaders.AddHeader(AName, AValue: String);
+const
+  SEP = ': ';
+begin
+  if not Assigned(FHeaders) then FHeaders := TStringList.Create;
+
+  FHeaders.Add(Concat(AName,SEP,AValue));
 end;
 
 procedure THeaders.FromRawString(AStringHeaders: String);
@@ -277,33 +258,32 @@ begin
 end;
 
 function THeaders.GetAll(AName: String): TStrings;
-var
-  Header: THeader;
 begin
-  Result := TStringList.Create;
-
-  for Header in Self do if Header.Name = AName then Result.Add(Header.Value);
+  Result := FHeaders;
 end;
 
 function THeaders.GetFirst(AName: String): String;
 var
-  Header: THeader;
+  Count               : Integer;
+  Header, Value : String;
 begin
-  for Header in Self do if Header.Name = AName then begin
-    Result := Header.Value;
-    Exit;
+  Result := '';
+
+  if not Assigned(FHeaders) then Exit;
+
+  for Count := 0 to Pred(FHeaders.Count) do begin
+    Header := Trim(FHeaders.Strings[Count]);
+
+    if not StartsStr(AName,Header) then Continue;
+
+    Value  := Trim(ReplaceStr(Header,AName,''));
+    Result := Trim(Copy(Value,Pos(':',Value) + 1));
   end;
 end;
 
 function THeaders.ToString: String;
-var
-  Header: THeader;
 begin
-  Result := '';
-
-  for Header in Self do Result := Result + Header.Name + ': ' + Header.Value + sLineBreak;
-
-  Result := Trim(Result);
+  Result := FHeaders.Text;
 end;
 
 {TBody}
@@ -540,7 +520,7 @@ end;
 
 function THttpResponse.GetContentLenght: Integer;
 begin
-  Result := StrToIntDef(FHeaders.GetFirst('Content-Lenght'), -1);
+  Result := StrToIntDef(FHeaders.GetFirst('Content-Length'), -1);
 end;
 
 function THttpResponse.GetContentType: String;
@@ -704,22 +684,78 @@ begin
 end;
 
 function THttpRequest.Request(AMethod, AUrl: String; ABody: TBody): Boolean;
+type
+  TURLSegments = record
+    Protocol : String;
+    HostName : String;
+    Port     : Word;
+    UserName : String;
+    PassWord : String;
+    Document : String;
+    Params   : String;
+    Path     : String;
+  end;
+function ParseURL(const lpszUrl: string): TURLSegments;
+var
+  lpszScheme      : array[0..INTERNET_MAX_SCHEME_LENGTH - 1]    of Char;
+  lpszHostName    : array[0..INTERNET_MAX_HOST_NAME_LENGTH - 1] of Char;
+  lpszUserName    : array[0..INTERNET_MAX_USER_NAME_LENGTH - 1] of Char;
+  lpszPassword    : array[0..INTERNET_MAX_PASSWORD_LENGTH - 1]  of Char;
+  lpszUrlPath     : array[0..INTERNET_MAX_PATH_LENGTH - 1]      of Char;
+  lpszExtraInfo   : array[0..1024 - 1]                          of Char;
+  lpUrlComponents : TURLComponents;
+begin
+  FillChar(Result,SizeOf(Result),0);
+
+  ZeroMemory(@Result, SizeOf(TURLComponents));
+  ZeroMemory(@lpszScheme, SizeOf(lpszScheme));
+  ZeroMemory(@lpszHostName, SizeOf(lpszHostName));
+  ZeroMemory(@lpszUserName, SizeOf(lpszUserName));
+  ZeroMemory(@lpszPassword, SizeOf(lpszPassword));
+  ZeroMemory(@lpszUrlPath, SizeOf(lpszUrlPath));
+  ZeroMemory(@lpszExtraInfo, SizeOf(lpszExtraInfo));
+  ZeroMemory(@lpUrlComponents, SizeOf(TURLComponents));
+
+  lpUrlComponents.dwStructSize      := SizeOf(TURLComponents);
+  lpUrlComponents.lpszScheme        := lpszScheme;
+  lpUrlComponents.dwSchemeLength    := SizeOf(lpszScheme);
+  lpUrlComponents.lpszHostName      := lpszHostName;
+  lpUrlComponents.dwHostNameLength  := SizeOf(lpszHostName);
+  lpUrlComponents.lpszUserName      := lpszUserName;
+  lpUrlComponents.dwUserNameLength  := SizeOf(lpszUserName);
+  lpUrlComponents.lpszPassword      := lpszPassword;
+  lpUrlComponents.dwPasswordLength  := SizeOf(lpszPassword);
+  lpUrlComponents.lpszUrlPath       := lpszUrlPath;
+  lpUrlComponents.dwUrlPathLength   := SizeOf(lpszUrlPath);
+  lpUrlComponents.lpszExtraInfo     := lpszExtraInfo;
+  lpUrlComponents.dwExtraInfoLength := SizeOf(lpszExtraInfo);
+
+  InternetCrackUrl(PChar(lpszUrl), Length(lpszUrl), ICU_DECODE or ICU_ESCAPE, lpUrlComponents);
+
+  Result.Protocol := IfThen(lpUrlComponents.dwSchemeLength > 0,Trim(lpUrlComponents.lpszScheme),'');
+  Result.HostName := IfThen(lpUrlComponents.dwHostNameLength > 0,Trim(lpUrlComponents.lpszHostName),'');
+  Result.Port     := lpUrlComponents.nPort;
+  Result.UserName := IfThen(lpUrlComponents.dwUserNameLength > 0,Trim(lpUrlComponents.lpszUserName),'');
+  Result.PassWord := IfThen(lpUrlComponents.dwPasswordLength > 0,Trim(lpUrlComponents.lpszPassword),'');
+  Result.Document := IfThen(lpUrlComponents.dwUrlPathLength > 0,Trim(lpUrlComponents.lpszUrlPath),'');
+  Result.Params   := IfThen(lpUrlComponents.dwExtraInfoLength > 0,Trim(lpUrlComponents.lpszExtraInfo),'');
+  Result.Path     := Result.Document + Result.Params;
+end;
 var
   hInet                      : HINTERNET;
   hConnect                   : HINTERNET;
   hRequest                   : HINTERNET;
   lpdwBufferLength           : Cardinal;
   lpdwReserved               : Cardinal;
-  IdURI                      : THttpURI;
   lpdwNumberOfBytesAvailable : Cardinal;
   dwBytesRead                : Cardinal;
+  URL                        : TURLSegments;
   Response                   : TBytes;
   Headers                    : PChar;
   Body                       : TMemoryStream;
   Cookie                     : String;
   dwFlags, dwBuffLen         : Cardinal;
   SecurityOption             : TSecurityOption;
-  TmpHead                    : TStringBuilder;
 const
   HTTP_VERSION: array [THttpVersion] of PChar = ('HTTP/1.0', 'HTTP/1.1');
 
@@ -728,21 +764,19 @@ begin
 
   FResponse := THttpResponse.Create(Self);
   hInet     := InternetOpen(PChar(FUserAgent), INTERNET_OPEN_TYPE_PRECONFIG, nil, nil, 0);
-  IdURI     := THttpURI.Create(AUrl);
+  URL       := ParseURL(AUrl);
 
   try
-    hConnect := InternetConnect(hInet, PChar(IdURI.Host), IdURI.Port, nil, nil, INTERNET_SERVICE_HTTP, 0, 0);
+    hConnect := InternetConnect(hInet, PChar(URL.HostName), URL.Port, nil, nil, INTERNET_SERVICE_HTTP, 0, 0);
     try
-
-      if (FSecurityOptions <> []) or (IdURI.Protocol = 'https') then begin
-        hRequest := HttpOpenRequest(hConnect, PChar(AMethod), PChar(IdURI.GetPathAndParams), HTTP_VERSION[FHttpVersion],'', nil, INTERNET_FLAG_SECURE, 0);
-      end else hRequest := HttpOpenRequest(hConnect, PChar(AMethod), PChar(IdURI.GetPathAndParams), HTTP_VERSION[FHttpVersion],'', nil, INTERNET_FLAG_RELOAD or INTERNET_FLAG_PRAGMA_NOCACHE, 0);
+      if (FSecurityOptions <> []) or (URL.Protocol = 'https') then begin
+        hRequest := HttpOpenRequest(hConnect, PChar(AMethod), PChar(URL.Path), HTTP_VERSION[FHttpVersion],'', nil, INTERNET_FLAG_SECURE, 0);
+      end else hRequest := HttpOpenRequest(hConnect, PChar(AMethod), PChar(URL.Path), HTTP_VERSION[FHttpVersion],'', nil, INTERNET_FLAG_RELOAD or INTERNET_FLAG_PRAGMA_NOCACHE, 0);
 
       dwBuffLen := SizeOf(dwFlags);
 
       if FSecurityOptions <> [] then
-        if InternetQueryOption(hRequest, INTERNET_OPTION_SECURITY_FLAGS, @dwFlags, dwBuffLen) then
-        begin
+        if InternetQueryOption(hRequest, INTERNET_OPTION_SECURITY_FLAGS, @dwFlags, dwBuffLen) then begin
           dwFlags := 0;
 
           for SecurityOption in FSecurityOptions do
@@ -768,22 +802,19 @@ begin
           InternetSetOption(hRequest, INTERNET_OPTION_SECURITY_FLAGS, @dwFlags, SizeOf(dwFlags));
         end else raise Exception.Create(GetErrorDescription(GetLastError));
 
-      TmpHead := TStringBuilder.Create;
       try
-        TmpHead.Append('Host: ' + IdURI.Host + sLineBreak);
+        FHeaders.AddHeader('Host',URL.HostName);
 
-        if FUseCookies then for Cookie in FCookies do TmpHead.Append('Cookie: ' + Cookie + sLineBreak);
+        if FUseCookies then for Cookie in FCookies do FHeaders.AddHeader('Cookie',Cookie);
 
         if Assigned(ABody) then begin
           Body := ABody.GetStream;
 
-          TmpHead.Append('Content-Type: ' + ABody.ContentType + sLineBreak);
-          if ABody.FNeedLength then TmpHead.Append('Content-Length: ' + IntToStr(Body.Size) + sLineBreak);
+          FHeaders.AddHeader('Content-Type',ABody.ContentType);
+          if ABody.FNeedLength then FHeaders.AddHeader('Content-Length',IntToStr(Body.Size));
         end else Body := TMemoryStream.Create;
 
-        TmpHead.Append(FHeaders.ToString);
-
-        Headers := PChar(TmpHead.ToString);
+        Headers := PChar(FHeaders.ToString);
 
         try
           if not HttpSendRequest(hRequest, Headers, Length(Headers), Body.Memory, Body.Size) then raise Exception.Create(GetErrorDescription(GetLastError));
@@ -818,7 +849,6 @@ begin
 
         if FUseCookies then for Cookie in FResponse.FHeaders.GetAll('Set-Cookie') do FCookies.Add(Cookie);
       finally
-        TmpHead.Free;
         InternetCloseHandle(hRequest);
       end;
     finally
@@ -826,7 +856,6 @@ begin
     end;
   finally
     InternetCloseHandle(hInet);
-    IdURI.Free;
   end;
 end;
 
@@ -834,153 +863,6 @@ procedure THttpRequest.SetUseCookies(AValue: Boolean);
 begin
   FUseCookies := AValue;
   if not AValue then FCookies.Clear;
-end;
-
-{THttpURI}
-
-constructor THttpURI.Create(const AURI: String = ''); {Do not Localize}
-begin
-  inherited Create;
-  if Length(AURI) > 0 then URI := AURI;
-end;
-
-procedure THttpURI.SetProtocol(const Value: String);
-begin
-  FProtocol := Value;
-  if FPort = 0 then begin
-    if SameText(FProtocol, 'HTTP') then
-      FPort := 80
-    else if SameText(FProtocol, 'HTTPS') then
-      FPort := 443
-    else if SameText(FProtocol, 'FTP') then FPort := 21;
-  end;
-end;
-
-procedure THttpURI.SetURI(const Value: String);
-var
-  LBuffer         : String;
-  LTokenPos, Port : Integer;
-  LURI            : String;
-begin
-  FURI       := Value;
-  FURI       := StringReplace(FURI, '\', '/', [rfReplaceAll]);
-  LURI       := FURI;
-  FHost      := '';
-  FProtocol  := '';
-  FPath      := '';
-  FDocument  := '';
-  FPort      := 0;
-  FBookmark  := '';
-  FUserName  := '';
-  FPassword  := '';
-  FParams    := '';
-  FIPVersion := ivIP4;
-
-  LTokenPos := Pos('://', LURI);
-
-  if LTokenPos > 0 then begin
-    SetProtocol(Copy(LURI, 1, LTokenPos - 1));
-    Delete(LURI, 1, LTokenPos + 2);
-    LTokenPos := Pos('?', LURI);
-
-    if LTokenPos > 0 then begin
-      FParams := Copy(LURI, LTokenPos + 1, MaxInt);
-      LURI := Copy(LURI, 1, LTokenPos - 1);
-    end;
-
-    LBuffer   := Fetch(LURI, '/');
-    LTokenPos := Pos('@', LBuffer);
-
-    if LTokenPos > 0 then begin
-      FPassword := Copy(LBuffer, 1, LTokenPos - 1);
-      Delete(LBuffer, 1, LTokenPos);
-      FUserName := Fetch(FPassword, ':');
-
-      if Length(FUserName) = 0 then FPassword := '';
-    end;
-
-    if (Pos('[', LBuffer) > 0) and (Pos(']', LBuffer) > Pos('[', LBuffer)) then begin
-      FHost := Fetch(LBuffer, ']');
-      Fetch(FHost, '[');
-      Fetch(LBuffer, ':');
-      FIPVersion := ivIP6;
-    end else FHost := Fetch(LBuffer, ':');
-
-    if TryStrToInt(LBuffer, Port) then FPort := Port;
-
-    // Get the path
-    LTokenPos := RPos('/', LURI, -1);
-
-    if LTokenPos > 0 then begin
-      FPath := '/' + Copy(LURI, 1, LTokenPos);
-      Delete(LURI, 1, LTokenPos);
-    end else FPath := '/';
-  end else begin
-    LTokenPos := Pos('?', LURI);
-
-    if LTokenPos > 0 then begin
-      FParams := Copy(LURI, LTokenPos + 1, MaxInt);
-      LURI    := Copy(LURI, 1, LTokenPos - 1);
-    end;
-
-    LTokenPos := RPos('/', LURI, -1);
-
-    if LTokenPos > 0 then begin
-      FPath := Copy(LURI, 1, LTokenPos);
-      Delete(LURI, 1, LTokenPos);
-    end;
-  end;
-
-  FDocument := LURI;
-  FBookmark := FDocument;
-  FDocument := Fetch(FBookmark, '#');
-end;
-
-function THttpURI.GetURI: String;
-begin
-  FURI   := GetFullURI;
-  Result := GetFullURI([]);
-end;
-
-function THttpURI.GetFullURI(const AOptionalFields: TURIOptionalFieldsSet): String;
-var
-  LURI: String;
-begin
-  if FProtocol = '' then raise Exception.Create('Protocol field is empty');
-  if FHost = ''     then raise Exception.Create('Host field is empty');
-
-  LURI := FProtocol + '://';
-
-  if (FUserName <> '') and (ofAuthInfo in AOptionalFields) then begin
-    LURI := LURI + FUserName;
-    if FPassword <> '' then LURI := LURI + ':' + FPassword;
-    LURI := LURI + '@';
-  end;
-
-  LURI := LURI + FHost;
-
-  if FPort <> 0 then begin
-    if SameText(FProtocol, 'HTTP') then begin
-      if FPort <> 80 then LURI := LURI + ':' + IntToStr(FPort);
-    end else if SameText(FProtocol, 'HTTPS') then begin
-      if FPort <> 443 then LURI := LURI + ':' + IntToStr(FPort);
-    end else if SameText(FProtocol, 'FTP') then begin
-      if FPort <> 21 then LURI := LURI + ':' + IntToStr(FPort);
-    end else LURI := LURI + ':' + IntToStr(FPort);
-  end;
-
-  LURI := LURI + GetPathAndParams;
-
-  if (FBookmark <> '') and (ofBookmark in AOptionalFields) then LURI := LURI + '#' + FBookmark;
-
-  Result := LURI;
-end;
-
-function THttpURI.GetPathAndParams: String;
-begin
-  Result := FPath + FDocument;
-
-  if FParams <> '' then Result := Result + '?' + FParams;
 end;
 
 end.

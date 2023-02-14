@@ -6,8 +6,6 @@ uses
   Classes, SysUtils;
 
 function PathEncode(const ASrc: String)                            : String;
-function RPos(const ASub, AIn: String; AStart: Integer = -1)       : Integer;
-function Fetch(var AInput: String; const ADelim: String)           : String;
 function GetErrorDescription(AErrorCode: Integer)                  : String;
 function AppendBytes(ABytes1, ABytes2: TBytes)                     : TBytes;
 function RandomHex                                                 : String;
@@ -38,43 +36,6 @@ begin
       Result := Result + ASrc[i];
       Inc(i);
     end;
-  end;
-end;
-
-function RPos(const ASub, AIn: String; AStart: Integer = -1): Integer;
-var
-  i         : Integer;
-  LStartPos : Integer;
-  LTokenLen : Integer;
-begin
-  Result    := 0;
-  LTokenLen := Length(ASub);
-
-  // Get starting position
-  if AStart < 0                             then AStart := Length(AIn);
-  if AStart < (Length(AIn) - LTokenLen + 1) then LStartPos := AStart else LStartPos := (Length(AIn) - LTokenLen + 1);
-
-  // Search for the String
-  for i := LStartPos downto 1 do begin
-    if SameText(Copy(AIn, i, LTokenLen), ASub) then begin
-      Result := i;
-      Break;
-    end;
-  end;
-end;
-
-function Fetch(var AInput: String; const ADelim: String): String;
-var
-  LPos: Integer;
-begin
-  LPos := Pos(ADelim, AInput);
-
-  if LPos = 0 then begin
-    Result := AInput;
-    AInput := ''; {Do not Localize}
-  end else begin
-    Result := Copy(AInput, 1, LPos - 1);
-    AInput := Copy(AInput, LPos + Length(ADelim), MaxInt);
   end;
 end;
 
@@ -174,7 +135,9 @@ begin
     ERROR_INTERNET_SEC_CERT_DATE_INVALID             : Result := 'SSL certificate date that was received from the server is bad. The certificate is expired.';
     ERROR_INTERNET_SEC_CERT_ERRORS                   : Result := 'The SSL certificate contains errors.';
     ERROR_INTERNET_SEC_CERT_NO_REV                   : Result := 'The SSL certificate was not revoked.';
+    {$IF CompilerVersion >= 20 }
     ERROR_INTERNET_SEC_CERT_REV_FAILED               : Result := 'Revocation of the SSL certificate failed.';
+    {$IFEND }
     ERROR_INTERNET_SEC_CERT_REVOKED                  : Result := 'The SSL certificate was revoked.';
     ERROR_INTERNET_SEC_INVALID_CERT                  : Result := 'The SSL certificate is invalid.';
     ERROR_INTERNET_SECURITY_CHANNEL_ERROR            : Result := 'The application experienced an internal error loading the SSL libraries.';
