@@ -14,7 +14,7 @@ begin
 end;
 ```
 ### POST
-Posting a simple text/JSON:
+#### Simple text/JSON:
 ```delphi
 procedure TForm1.Button1Click(Sender: TObject);
 begin
@@ -24,7 +24,7 @@ begin
     ShowMessage('ERROR ' + IntToStr(HttpRequest1.Response.StatusCode));
 end;
 ```
-#### Posting a file with a Multi-Part form:
+#### File with a Multi-Part form:
 ```delphi
 procedure TForm1.Button1Click(Sender: TObject);
 var
@@ -39,7 +39,7 @@ begin
   ShowMessage(HttpRequest1.Response.ContentAsString);
 end;
 ```
-#### Posting a URL-encoded form:
+#### URL-encoded form:
 ```delphi
 procedure TForm1.Button1Click(Sender: TObject);
 var
@@ -55,7 +55,7 @@ begin
 end;
 ```
 
-### Auth
+### Authentication
  - Method 1
  ```delphi
   HttpRequest1.Username := 'admin';
