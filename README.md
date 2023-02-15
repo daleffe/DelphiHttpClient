@@ -24,7 +24,7 @@ begin
     ShowMessage('ERROR ' + IntToStr(HttpRequest1.Response.StatusCode));
 end;
 ```
-Posting a file with a Multipart form:
+#### Posting a file with a Multi-Part form:
 ```delphi
 procedure TForm1.Button1Click(Sender: TObject);
 var
@@ -39,7 +39,7 @@ begin
   ShowMessage(HttpRequest1.Response.ContentAsString);
 end;
 ```
-Posting a url encoded form:
+#### Posting a URL-encoded form:
 ```delphi
 procedure TForm1.Button1Click(Sender: TObject);
 var
@@ -55,9 +55,23 @@ begin
 end;
 ```
 
+### Auth
+ - Method 1
+ ```delphi
+  HttpRequest1.Username := 'admin';
+  HttpRequest1.Password := '123';
+ ```
+
+ - Method 2
+ ```delphi
+ HttpRequest1.Get('http://admin:123@contoso.com');
+ ShowMessage(HttpRequest1.Response.ContentAsString);
+ ```
+ 
 ## Improvements
 - Added the possibility to send data using GET method, similar to POST;
 - Added _ContentType_ parameter to methods that can send raw text;
+- Added _Basic Authentication_ (URL inline OR username and password).
 
 ## Fixes
-- Solved bug that don't return Content-Length.
+- Solved bug that don't return _Content-Length_.
