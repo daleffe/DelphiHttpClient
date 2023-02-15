@@ -27,6 +27,7 @@ type
     destructor  Destroy; override;
 
     procedure   AddHeader(AName, AValue: String);
+    function    Clear                   : Boolean;
 
     function    GetAll(AName: String)   : TStrings;
     function    GetFirst(AName: String) : String;
@@ -152,7 +153,13 @@ type
     FResponse        : THttpResponse;
     FHttpVersion     : THttpVersion;
 
+    FUsername        : String;
+    FPassword        : String;
+    FAuthorization   : String;
+
+    procedure SetAuthentication(AUsername, APassword: String);
     procedure SetUseCookies(AValue: Boolean);
+
     function  Request(AMethod, AUrl: String; ABody: TBody) : Boolean;
   public
     constructor Create(AOwner: TComponent); override;
@@ -180,25 +187,27 @@ type
     property Cookies         : TCookies      read FCookies;
     property Response        : THttpResponse read FResponse;
   published
+    property Username        : String           read FUsername        write FUsername;
+    property Password        : String           read FPassword        write FPassword;
     property Headers         : THeaders         read FHeaders         write FHeaders;
-    property UseCookies      : Boolean          read FUseCookies      write SetUseCookies default False;
+    property UseCookies      : Boolean          read FUseCookies      write SetUseCookies     default False;
     property SecurityOptions : TSecurityOptions read FSecurityOptions write FSecurityOptions;
     property UserAgent       : String           read FUserAgent       write FUserAgent;
-    property HttpVersion     : THttpVersion     read FHttpVersion     write FHttpVersion default hv1_1;
+    property HttpVersion     : THttpVersion     read FHttpVersion     write FHttpVersion      default hv1_1;
   end;
 
-  TIPVersion            = (ivIP4, ivIP6);
+  TIPVersion = (ivIP4, ivIP6);
 
 procedure Register;
 
 implementation
 
 uses
-  Windows, IOUtils, UrlMon, WinInet, DateUtils, StrUtils, HttpUtils;
+  Windows, IOUtils, UrlMon, WinInet, DateUtils, StrUtils, EncdDecd, HttpUtils;
 
 procedure Register;
 begin
-  Classes.RegisterComponents('HttpClient', [THttpRequest]);
+  Classes.RegisterComponents('WinInetHttpClient', [THttpRequest]);
 end;
 
 {THeader}
@@ -212,6 +221,17 @@ begin
 end;
 
 {THeaders}
+
+function THeaders.Clear: Boolean;
+begin
+  Result := False;
+
+  if not Assigned(FHeaders) then Exit;
+  
+  FHeaders.Clear;
+
+  Result := FHeaders.Count = 0;
+end;
 
 constructor THeaders.Create;
 begin
@@ -547,7 +567,7 @@ begin
   FHeaders     := THeaders.Create;
   FCookies     := TCookies.Create;
   FHttpVersion := hv1_1;
-  FUserAgent   := 'Mozilla/5.0 (compatible, HttpClient)';
+  FUserAgent   := 'Mozilla/5.0 (compatible, WinInetHttpClient)';
 end;
 
 function THttpRequest.Delete(AUrl: String; ABody: TBody): Boolean;
@@ -762,9 +782,13 @@ const
 begin
   Result    := False;
 
+  SetAuthentication(FUsername, FPassword);
+
   FResponse := THttpResponse.Create(Self);
   hInet     := InternetOpen(PChar(FUserAgent), INTERNET_OPEN_TYPE_PRECONFIG, nil, nil, 0);
   URL       := ParseURL(AUrl);
+
+  SetAuthentication(URL.UserName, URL.PassWord);
 
   try
     hConnect := InternetConnect(hInet, PChar(URL.HostName), URL.Port, nil, nil, INTERNET_SERVICE_HTTP, 0, 0);
@@ -805,7 +829,8 @@ begin
       try
         FHeaders.AddHeader('Host',URL.HostName);
 
-        if FUseCookies then for Cookie in FCookies do FHeaders.AddHeader('Cookie',Cookie);
+        if (Trim(FAuthorization) <> '') then FHeaders.AddHeader('Authorization','Basic ' + FAuthorization);
+        if FUseCookies                  then for Cookie in FCookies do FHeaders.AddHeader('Cookie',Cookie);
 
         if Assigned(ABody) then begin
           Body := ABody.GetStream;
@@ -857,6 +882,13 @@ begin
   finally
     InternetCloseHandle(hInet);
   end;
+end;
+
+procedure THttpRequest.SetAuthentication(AUsername, APassword: String);
+const
+  SEP=':';
+begin
+  if (Trim(AUsername) <> '') and (Trim(APassword) <> '') then FAuthorization := EncodeString(Concat(AUsername,SEP,APassword));
 end;
 
 procedure THttpRequest.SetUseCookies(AValue: Boolean);
