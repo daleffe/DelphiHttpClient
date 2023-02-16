@@ -1,4 +1,4 @@
-# DelphiHttpComponent
+# PasWinInetHttpClient
 Delphi component wrapper for WinInet library. Written in Delphi 2010.
 
 ## How to use
