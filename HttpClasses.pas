@@ -888,7 +888,7 @@ procedure THttpRequest.SetAuthentication(AUsername, APassword: String);
 const
   SEP=':';
 begin
-  if (Trim(AUsername) <> '') and (Trim(APassword) <> '') then FAuthorization := EncodeString(Concat(AUsername,SEP,APassword));
+  if (Trim(AUsername) <> '') and (Trim(APassword) <> '') then FAuthorization := EncodeString(Concat(Trim(AUsername),SEP,Trim(APassword)));
 end;
 
 procedure THttpRequest.SetUseCookies(AValue: Boolean);
